@@ -1,0 +1,83 @@
+#------------------------------------------------------------------------------
+# Returns whether a file/directory is not within the lastest n items by
+# modified date.
+#------------------------------------------------------------------------------
+
+function show_help
+{
+    echo "usage: not_within_last COUNT ITEM [(-d|--directory) DIRECTORY]"
+    echo "       not_within_last (-v|--version)"
+    echo "       not_within_last (-h|--help)"
+    exit 0
+}
+
+function show_version
+{
+    echo "not_within_last 1.0.0"
+    exit 0
+}
+
+function error
+{
+    echo "error: $1" >&2
+    exit 1
+}
+
+# defaults
+directory="$(pwd)"
+
+while getopts ":hvd:-:" opt; do
+    case $opt in
+        -)
+            case "${OPTARG}" in
+                help)           show_help;;
+                version)        show_version "$VERSION";;
+                directory)      directory="${!OPTIND}"
+                                OPTIND=$(( $OPTIND + 1 ))
+                                ;;
+                *)              error "Unimplemented option --${OPTARG}";;
+            esac
+            ;;
+        h)  show_help;;
+        v)  show_version "$VERSION";;
+        d)  directory="$OPTARG";;
+        \?) error "Invalid option: -$OPTARG";;
+        :)  error "Option -$OPTARG requires an argument.";;
+        *)  error "Unimplemented option: -$OPTARG";;
+    esac
+done
+
+count="${!OPTIND}"
+OPTIND=$(( $OPTIND + 1 ))
+item="${!OPTIND}"
+
+# check input
+if [ -z "$count" ]; then
+    error "option COUNT is required"
+fi
+if [ -z "$item" ]; then
+    error "option ITEM is required"
+elif [ ! -d "$item" ] && [ ! -f "$item" ]; then
+    error "item '${item}' does not exist"
+fi
+if [ ! -d "$directory" ]; then
+    error "directory '$directory' does not exist"
+fi
+
+# get directory contents, one per line by modified date
+directory="${directory%/}"
+contents="$(ls -1 -t -d "${directory}"/*)"
+IFS=$'\n' read -rd '' -a contents <<< "$contents"
+
+index=0
+for element in "${contents[@]}"; do
+    echo "checking $element = $item"
+    if [[ "${element}" = "${item}" ]]; then
+        exit 1
+    fi
+    index=$((index + 1))
+    if (( "$index" >= "$count" )); then
+        exit 0
+    fi
+done
+exit 1  # should not get here if executed properly
