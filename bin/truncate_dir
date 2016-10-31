@@ -1,0 +1,91 @@
+#---------------------------------------------------------
+# delete all but the last n items in a directory
+#---------------------------------------------------------
+
+function show_help
+{
+    echo "usage: truncate_dir COUNT [(-d|--directory) DIRECTORY] [(-n|--dry-run)]"
+    echo "       truncate_dir (-v|--version)"
+    echo "       truncate_dir (-h|--help)"
+    exit 0
+}
+
+function show_version
+{
+    echo "truncate_dir 1.0.0"
+    exit 0
+}
+
+function error
+{
+    echo "error: $1" >&2
+    exit 1
+}
+
+while getopts ":hvd:n-:" opt; do
+    echo "$opt"
+    case $opt in
+        -)
+            case "${OPTARG}" in
+                help)           show_help;;
+                version)        show_version;;
+                directory)      directory="${!OPTIND}"
+                                OPTIND=$(( $OPTIND + 1 ))
+                                ;;
+                directory=*)    directory="${OPTARG#*=}";;
+                dry-run)        dry_run=true;;
+                *)              error "Unimplemented option --${OPTARG}";;
+            esac
+            ;;
+        h)  show_help;;
+        v)  show_version;;
+        d)  directory="$OPTARG";;
+        n)  dry_run=true;;
+        \?) error "Invalid option: -$OPTARG";;
+        :)  error "Option -$OPTARG requires an argument.";;
+        *)  error "Unimplemented option: -$OPTARG";;
+    esac
+done
+
+count="${!OPTIND}"
+if [ -z "$count" ]; then
+    echo "usage: truncate_dir [(-d|--directory) DIRECTORY] [(-n|--dry-run)] COUNT"
+    echo "error: COUNT is required"
+    exit 1
+fi
+
+# check that count is the last option or the result will be unexpected
+OPTIND=$(( $OPTIND + 1 ))
+remainder="${!OPTIND}"
+if [ ! -z "$remainder" ]; then
+    echo "usage: truncate_dir [(-d|--directory) DIRECTORY] [(-n|--dry-run)] COUNT"
+    echo "error: COUNT must be the final parameter"
+    exit 1
+fi
+
+if [ -z "$dry_run" ]; then
+    dry_run=false
+fi
+if [ -z "$directory" ]; then
+    directory=$(pwd)
+elif [ ! -d "$directory" ]; then
+    error "directory '$directory' does not exist"
+fi
+directory="${directory%/}"
+
+# echo "count=${count} dry_run=${dry_run} directory=${directory}"
+
+contents="$(ls -1 -t "${directory}")"  # list one per line by modified date
+IFS=$'\n' read -rd '' -a contents <<< "$contents"
+
+if (( "${#contents[@]}" > "$count" )); then
+    for element in "${contents[@]:$count}"
+    do
+        if "$dry_run"; then
+            echo "would delete '$directory/$element'"
+        else
+            rm -fdr "$directory/$element"
+            echo "deleted '$directory/$element'"
+        fi
+    done
+fi
